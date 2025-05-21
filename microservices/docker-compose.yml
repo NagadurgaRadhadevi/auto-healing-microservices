@@ -1,0 +1,15 @@
+version: '3'
+services:
+  service-a:
+    image: node:14
+    container_name: service-a
+    ports:
+      - "3001:3000"
+    command: sh -c "npm install -g http-server && http-server"
+
+  service-b:
+    image: node:14
+    container_name: service-b
+    ports:
+      - "3002:3000"
+    command: sh -c "npm install -g http-server && http-server"

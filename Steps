@@ -1,0 +1,152 @@
+Auto-Healing Microservices Project - Complete Setup Guide
+
+This project demonstrates how to build an auto-healing microservices environment deployed on an AWS EC2 instance using Docker, Prometheus, Alertmanager, Grafana, and AWS Lambda to automatically reboot the instance in case of failure.
+
+Step 1: Launch an AWS EC2 Instance
+
+- Log in to your AWS Management Console.
+- Navigate to EC2 and click "Launch Instance."
+- Choose Amazon Linux 2 or Ubuntu Server as your AMI.
+- Select an instance type (t2.micro recommended for testing).
+- Configure the security group to allow inbound traffic on the following ports:
+  - 3001 and 3002 (microservices)
+  - 9090 (Prometheus)
+  - 9093 (Alertmanager)
+  - 3000 (Grafana)
+  - 9100 (Node Exporter)
+- Create or use an existing SSH key pair.
+- Launch the instance and note the public IP address.
+
+Step 2: Connect to EC2 Instance via SSH
+
+On your local terminal, connect using:
+
+ssh -i /path/to/your-key.pem ec2-user@<ec2-public-ip>
+
+Replace `/path/to/your-key.pem` with your SSH key file path and `<ec2-public-ip>` with your EC2 instance's public IP address.
+
+Step 3: Install Docker and Docker Compose
+
+Update your package manager and install Docker:
+
+sudo yum update -y
+sudo amazon-linux-extras install docker -y
+sudo service docker start
+sudo usermod -aG docker ec2-user
+exit
+
+Reconnect to the instance for Docker group permissions to apply:
+
+ssh -i /path/to/your-key.pem ec2-user@<ec2-public-ip>
+
+Install Docker Compose:
+
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+docker-compose --version
+
+Step 4: Clone Your GitHub Repository
+
+Clone your project repository which contains all the code and configuration files:
+
+git clone https://github.com/your-username/your-repo.git
+cd your-repo
+
+Step 5: Start Microservices
+
+Navigate to the microservices directory and start your microservices with Docker Compose:
+
+cd microservices
+docker-compose up -d
+
+Verify services by accessing:
+
+http://<ec2-public-ip>:3001 (Service A)
+http://<ec2-public-ip>:3002 (Service B)
+
+Step 6: Deploy Prometheus
+
+Run Prometheus container with your config files:
+
+docker run -d -p 9090:9090 \
+  -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml \
+  -v $(pwd)/alert.rules.yml:/etc/prometheus/alert.rules.yml \
+  prom/prometheus
+
+Open Prometheus UI at http://<ec2-public-ip>:9090.
+
+Step 7: Deploy Alertmanager
+
+Run Alertmanager container:
+
+docker run -d -p 9093:9093 \
+  -v $(pwd)/alertmanager.yml:/etc/alertmanager/alertmanager.yml \
+  prom/alertmanager
+
+Access Alertmanager at http://<ec2-public-ip>:9093.
+
+Step 8: Run Node Exporter
+
+Run Node Exporter container to export system metrics:
+
+docker run -d --net="host" --name=node-exporter prom/node-exporter
+
+Step 9: Deploy Grafana for Visualization
+
+Run Grafana container:
+
+docker run -d -p 3000:3000 grafana/grafana
+
+Open Grafana UI at http://<ec2-public-ip>:3000.
+
+- Login with default credentials: username admin, password admin.
+- Add Prometheus as data source with URL http://localhost:9090.
+- Import or create dashboards to visualize metrics.
+
+Step 10: Create AWS Lambda Function to Auto-Reboot EC2
+
+- Open AWS Lambda console and create a new Python function.
+- Use this example code for rebooting EC2 (replace instance ID):
+
+import boto3
+
+def lambda_handler(event, context):
+    ec2 = boto3.client('ec2')
+    instance_id = 'i-xxxxxxxxxxxxxxxxx'  # Replace with your instance ID
+    response = ec2.reboot_instances(InstanceIds=[instance_id])
+    return response
+
+- Attach IAM role with permission ec2:RebootInstances to Lambda.
+- Save function and note Lambda ARN.
+
+Step 11: Create CloudWatch Alarm to Trigger Lambda
+
+- Go to CloudWatch console → Alarms → Create Alarm.
+- Select EC2 metrics → StatusCheckFailed.
+- Set threshold to trigger on failure.
+- Choose Lambda function as alarm action.
+- Save alarm.
+
+Step 12: Test the Auto-Healing Setup
+
+- Stop a microservice container to simulate failure:
+
+docker stop <service-container-name>
+
+- Confirm Prometheus and Alertmanager detect and alert failure.
+- Simulate EC2 failure (stop the instance).
+- Confirm CloudWatch alarm triggers Lambda and instance reboots.
+
+Troubleshooting:
+
+- Check Docker logs:
+
+docker logs <container-name>
+
+- Verify Security Group ports.
+- Restart Docker or EC2 if needed.
+- Check IAM roles and permissions.
+
+---
+
+Congratulations! You have successfully set up a complete auto-healing microservices environment with monitoring, alerting, visualization, and automated recovery on AWS.
